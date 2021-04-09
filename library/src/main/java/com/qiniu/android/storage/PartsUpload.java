@@ -4,6 +4,7 @@ import com.qiniu.android.collect.ReportItem;
 import com.qiniu.android.collect.UploadInfoReporter;
 import com.qiniu.android.http.ResponseInfo;
 import com.qiniu.android.http.metrics.UploadRegionRequestMetrics;
+import com.qiniu.android.storage.stream.IStreamFactory;
 import com.qiniu.android.utils.AsyncRun;
 import com.qiniu.android.utils.LogUtil;
 import com.qiniu.android.utils.StringUtils;
@@ -12,6 +13,7 @@ import com.qiniu.android.utils.Utils;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 
 class PartsUpload extends BaseUpload {
 
@@ -20,7 +22,8 @@ class PartsUpload extends BaseUpload {
     private ResponseInfo uploadDataErrorResponseInfo;
     private JSONObject uploadDataErrorResponse;
 
-    protected PartsUpload(File file,
+    protected PartsUpload(IStreamFactory factory,
+                          String fileName,
                           String key,
                           UpToken token,
                           UploadOptions option,
@@ -28,7 +31,7 @@ class PartsUpload extends BaseUpload {
                           Recorder recorder,
                           String recorderKey,
                           UpTaskCompletionHandler completionHandler) {
-        super(file, key, token, option, config, recorder, recorderKey, completionHandler);
+        super(factory, fileName, key, token, option, config, recorder, recorderKey, completionHandler);
     }
 
     @Override
@@ -37,10 +40,10 @@ class PartsUpload extends BaseUpload {
 
         if (config != null && config.resumeUploadVersion == Configuration.RESUME_UPLOAD_VERSION_V1) {
             LogUtil.i("key:" + StringUtils.toNonnullString(key) + " 分片V1");
-            uploadPerformer = new PartsUploadPerformerV1(file, fileName, key, token, option, config, recorderKey);
+            uploadPerformer = new PartsUploadPerformerV1(factory, fileName, key, token, option, config, recorderKey);
         } else {
             LogUtil.i("key:" + StringUtils.toNonnullString(key) + " 分片V2");
-            uploadPerformer = new PartsUploadPerformerV2(file, fileName, key, token, option, config, recorderKey);
+            uploadPerformer = new PartsUploadPerformerV2(factory, fileName, key, token, option, config, recorderKey);
         }
     }
 
@@ -85,7 +88,7 @@ class PartsUpload extends BaseUpload {
             LogUtil.i("key:" + StringUtils.toNonnullString(key) + " region:" + StringUtils.toNonnullString(uploadPerformer.currentRegion.getZoneInfo().regionId));
         }
 
-        if (file == null || !uploadPerformer.canReadFile()) {
+        if (factory == null) {
             code = ResponseInfo.LocalIOError;
         }
 
@@ -241,7 +244,6 @@ class PartsUpload extends BaseUpload {
     @Override
     protected void completeAction(ResponseInfo responseInfo, JSONObject response) {
         reportBlock();
-        uploadPerformer.closeFile();
         if (shouldRemoveUploadInfoRecord(responseInfo)) {
             uploadPerformer.removeUploadInfoRecord();
         }
@@ -282,7 +284,7 @@ class PartsUpload extends BaseUpload {
         item.setReport(metrics.totalElapsedTime(), ReportItem.BlockKeyTotalElapsedTime);
         item.setReport(metrics.bytesSend(), ReportItem.BlockKeyBytesSent);
         item.setReport(uploadPerformer.recoveredFrom, ReportItem.BlockKeyRecoveredFrom);
-        item.setReport(file.length(), ReportItem.BlockKeyFileSize);
+        item.setReport(factory.sizeOfStream(), ReportItem.BlockKeyFileSize);
         item.setReport(Utils.getCurrentProcessID(), ReportItem.BlockKeyPid);
         item.setReport(Utils.getCurrentThreadID(), ReportItem.BlockKeyTid);
 

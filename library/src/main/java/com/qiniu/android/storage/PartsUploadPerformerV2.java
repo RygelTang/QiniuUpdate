@@ -1,30 +1,34 @@
 package com.qiniu.android.storage;
 
+import android.util.Log;
+
 import com.qiniu.android.http.ResponseInfo;
 import com.qiniu.android.http.metrics.UploadRegionRequestMetrics;
 import com.qiniu.android.http.request.RequestTransaction;
 import com.qiniu.android.http.request.handler.RequestProgressHandler;
+import com.qiniu.android.storage.stream.IStreamFactory;
+import com.qiniu.android.storage.stream.utils.StreamUtils;
 import com.qiniu.android.utils.LogUtil;
 import com.qiniu.android.utils.StringUtils;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
 class PartsUploadPerformerV2 extends PartsUploadPerformer {
 
-    PartsUploadPerformerV2(File file,
+    PartsUploadPerformerV2(IStreamFactory factory,
                            String fileName,
                            String key,
                            UpToken token,
                            UploadOptions options,
                            Configuration config,
                            String recorderKey) {
-        super(file, fileName, key, token, options, config, recorderKey);
+        super(factory, fileName, key, token, options, config, recorderKey);
     }
 
     @Override
@@ -37,7 +41,7 @@ class PartsUploadPerformerV2 extends PartsUploadPerformer {
 
     @Override
     UploadFileInfo getDefaultUploadFileInfo() {
-        return new UploadFileInfoPartV2(file.length(), config.chunkSize, file.lastModified());
+        return new UploadFileInfoPartV2(factory.sizeOfStream(), config.chunkSize, factory.lastModifyTime());
     }
 
     @Override
@@ -169,18 +173,21 @@ class PartsUploadPerformerV2 extends PartsUploadPerformer {
     }
 
     private byte[] getUploadData(UploadData data) {
-        if (randomAccessFile == null || data == null) {
+        if (data == null) {
             return null;
         }
-        byte[] uploadData = new byte[(int) data.size];
         try {
-            synchronized (randomAccessFile) {
-                randomAccessFile.seek(data.offset);
-                randomAccessFile.read(uploadData, 0, (int) data.size);
+            byte[] uploadData;
+            synchronized (factory) {
+                final long offset = data.offset;
+                InputStream stream = factory.newStreamWithOffset(offset);
+                Log.e("DEBUG_TAG", "offset : " + offset);
+                uploadData = StreamUtils.read(stream, (int) data.size);
             }
+            return uploadData;
         } catch (IOException e) {
-            uploadData = null;
+            e.printStackTrace();
         }
-        return uploadData;
+        return null;
     }
 }

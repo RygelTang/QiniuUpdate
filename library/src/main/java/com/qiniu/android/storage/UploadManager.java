@@ -5,6 +5,8 @@ import com.qiniu.android.collect.UploadInfoReporter;
 import com.qiniu.android.http.ResponseInfo;
 import com.qiniu.android.http.dns.DnsPrefetchTransaction;
 import com.qiniu.android.http.metrics.UploadTaskMetrics;
+import com.qiniu.android.storage.stream.IStreamFactory;
+import com.qiniu.android.storage.stream.impl.FileStreamFactory;
 import com.qiniu.android.utils.AsyncRun;
 import com.qiniu.android.utils.Utils;
 import com.qiniu.android.utils.Wait;
@@ -14,6 +16,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
 
@@ -106,6 +109,52 @@ public class UploadManager {
             return;
         }
         putFile(file, key, token, options, completionHandler);
+    }
+
+    public void put(final IStreamFactory factory,
+                    final String key,
+                    final String token,
+                    final UpCompletionHandler completionHandler,
+                    final UploadOptions options) {
+        put(factory, key, null, token, completionHandler, options);
+    }
+
+    public void put(final IStreamFactory factory,
+                    final String key,
+                    final String fileName,
+                    final String token,
+                    final UpCompletionHandler completionHandler,
+                    final UploadOptions options) {
+        // 检查数据长度
+        if (factory.sizeOfStream() <= 0) {
+            ResponseInfo responseInfo = ResponseInfo.zeroSize("no input data");
+            completeAction(token, key, responseInfo, responseInfo.response, null, completionHandler);
+            return;
+        }
+        // 检查上传Token
+        final UpToken upToken = UpToken.parse(token);
+        if (upToken == null || !upToken.isValid()) {
+            ResponseInfo info = ResponseInfo.invalidToken("invalid token");
+            completeAction(token, key, info, null, null, completionHandler);
+            return;
+        }
+
+        DnsPrefetchTransaction.addDnsCheckAndPrefetchTransaction(config.zone, upToken);
+
+        BaseUpload.UpTaskCompletionHandler completionHandlerP = new BaseUpload.UpTaskCompletionHandler() {
+            @Override
+            public void complete(ResponseInfo responseInfo, String key, UploadTaskMetrics requestMetrics, JSONObject response) {
+                completeAction(token, key, responseInfo, response, requestMetrics, completionHandler);
+            }
+        };
+
+        String recorderKey = key;
+        if (config.recorder != null && config.keyGen != null) {
+            recorderKey = config.keyGen.gen(key, factory);
+        }
+
+        final PartsUpload up = new PartsUpload(factory, fileName, key, upToken, options, config, config.recorder, recorderKey, completionHandlerP);
+        AsyncRun.runInBack(up);
     }
 
     /**
@@ -272,9 +321,10 @@ public class UploadManager {
             return;
         }
 
+        IStreamFactory factory = new FileStreamFactory(file);
         String recorderKey = key;
         if (config.recorder != null && config.keyGen != null) {
-            recorderKey = config.keyGen.gen(key, file);
+            recorderKey = config.keyGen.gen(key, factory);
         }
 
         BaseUpload.UpTaskCompletionHandler completionHandlerP = new BaseUpload.UpTaskCompletionHandler() {
@@ -284,10 +334,10 @@ public class UploadManager {
             }
         };
         if (config.useConcurrentResumeUpload) {
-            final ConcurrentResumeUpload up = new ConcurrentResumeUpload(file, key, t, option, config, config.recorder, recorderKey, completionHandlerP);
+            final ConcurrentResumeUpload up = new ConcurrentResumeUpload(factory, key, t, option, config, config.recorder, recorderKey, completionHandlerP);
             AsyncRun.runInBack(up);
         } else {
-            final PartsUpload up = new PartsUpload(file, key, t, option, config, config.recorder, recorderKey, completionHandlerP);
+            final PartsUpload up = new PartsUpload(factory, file.getName(), key, t, option, config, config.recorder, recorderKey, completionHandlerP);
             AsyncRun.runInBack(up);
         }
     }

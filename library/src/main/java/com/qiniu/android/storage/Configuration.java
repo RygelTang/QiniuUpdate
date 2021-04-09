@@ -2,11 +2,9 @@ package com.qiniu.android.storage;
 
 import com.qiniu.android.common.AutoZone;
 import com.qiniu.android.common.Zone;
-import com.qiniu.android.http.dns.Dns;
 import com.qiniu.android.http.ProxyConfiguration;
 import com.qiniu.android.http.UrlConverter;
-
-import java.io.File;
+import com.qiniu.android.storage.stream.IStreamFactory;
 
 public final class Configuration {
 
@@ -151,8 +149,8 @@ public final class Configuration {
         if (keyGen == null) {
             keyGen = new KeyGenerator() {
                 @Override
-                public String gen(String key, File file) {
-                    return key + "_._" + new StringBuffer(file.getAbsolutePath()).reverse();
+                public String gen(String key, IStreamFactory factory) {
+                    return key + "_._" + new StringBuffer(factory.identity()).reverse();
                 }
             };
         }

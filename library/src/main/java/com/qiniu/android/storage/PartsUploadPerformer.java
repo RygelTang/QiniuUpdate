@@ -6,6 +6,7 @@ import com.qiniu.android.http.metrics.UploadRegionRequestMetrics;
 import com.qiniu.android.http.request.IUploadRegion;
 import com.qiniu.android.http.request.RequestTransaction;
 import com.qiniu.android.http.serverRegion.UploadDomainRegion;
+import com.qiniu.android.storage.stream.IStreamFactory;
 import com.qiniu.android.utils.AsyncRun;
 import com.qiniu.android.utils.LogUtil;
 import com.qiniu.android.utils.StringUtils;
@@ -13,10 +14,6 @@ import com.qiniu.android.utils.StringUtils;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,8 +23,7 @@ abstract class PartsUploadPerformer {
 
     final String key;
     final String fileName;
-    final File file;
-    final RandomAccessFile randomAccessFile;
+    final IStreamFactory factory;
 
     final UpToken token;
     final UploadOptions options;
@@ -43,14 +39,14 @@ abstract class PartsUploadPerformer {
     UploadFileInfo fileInfo;
     List<RequestTransaction> uploadTransactions;
 
-    PartsUploadPerformer(File file,
+    PartsUploadPerformer(IStreamFactory factory,
                          String fileName,
                          String key,
                          UpToken token,
                          UploadOptions options,
                          Configuration config,
                          String recorderKey) {
-        this.file = file;
+        this.factory = factory;
         this.key = key;
         this.fileName = fileName;
         this.token = token;
@@ -59,14 +55,6 @@ abstract class PartsUploadPerformer {
         this.recorder = config.recorder;
         this.recorderKey = recorderKey;
 
-        RandomAccessFile randomAccessFile = null;
-        if (file != null) {
-            try {
-                randomAccessFile = new RandomAccessFile(file, "r");
-            } catch (FileNotFoundException ignored) {
-            }
-        }
-        this.randomAccessFile = randomAccessFile;
         this.initData();
     }
 
@@ -75,23 +63,6 @@ abstract class PartsUploadPerformer {
         recoverUploadInfoFromRecord();
         if (fileInfo == null) {
             fileInfo = getDefaultUploadFileInfo();
-        }
-    }
-
-    boolean canReadFile() {
-        return randomAccessFile != null;
-    }
-
-    void closeFile() {
-        if (randomAccessFile != null) {
-            try {
-                randomAccessFile.close();
-            } catch (IOException e) {
-                try {
-                    randomAccessFile.close();
-                } catch (IOException ignored) {
-                }
-            }
         }
     }
 
@@ -180,7 +151,7 @@ abstract class PartsUploadPerformer {
                 " recoverUploadInfoFromRecord");
 
         String key = recorderKey;
-        if (recorder == null || key == null || key.length() == 0 || file == null) {
+        if (recorder == null || key == null || key.length() == 0) {
             return;
         }
 
@@ -196,9 +167,9 @@ abstract class PartsUploadPerformer {
             JSONObject info = new JSONObject(new String(data));
             ZoneInfo zoneInfo = ZoneInfo.buildFromJson(info.getJSONObject(kRecordZoneInfoKey));
             UploadFileInfo recoverFileInfo = getFileFromJson(info.getJSONObject(kRecordFileInfoKey));
-            if (zoneInfo != null && recoverFileInfo != null && !recoverFileInfo.isEmpty() && file != null &&
-                    recoverFileInfo.size == file.length() &&
-                    recoverFileInfo.modifyTime == file.lastModified()) {
+            if (zoneInfo != null && recoverFileInfo != null && !recoverFileInfo.isEmpty() && factory != null &&
+                    recoverFileInfo.size == factory.sizeOfStream() &&
+                    recoverFileInfo.modifyTime == factory.lastModifyTime()) {
 
                 LogUtil.i("key:" + StringUtils.toNonnullString(key) +
                         " recorderKey:" + StringUtils.toNonnullString(recorderKey) +

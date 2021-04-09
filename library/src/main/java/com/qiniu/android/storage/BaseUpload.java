@@ -4,21 +4,24 @@ import com.qiniu.android.common.Zone;
 import com.qiniu.android.common.ZoneInfo;
 import com.qiniu.android.common.ZonesInfo;
 import com.qiniu.android.http.ResponseInfo;
-import com.qiniu.android.http.request.IUploadRegion;
 import com.qiniu.android.http.metrics.UploadRegionRequestMetrics;
 import com.qiniu.android.http.metrics.UploadTaskMetrics;
+import com.qiniu.android.http.request.IUploadRegion;
 import com.qiniu.android.http.serverRegion.UploadDomainRegion;
+import com.qiniu.android.storage.stream.IStreamFactory;
+import com.qiniu.android.storage.stream.impl.ByteStreamFactory;
+import com.qiniu.android.storage.stream.impl.FileStreamFactory;
 
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 
 abstract class BaseUpload implements Runnable {
+    protected final IStreamFactory factory;
     protected final String key;
     protected final String fileName;
-    protected final byte[] data;
-    protected final File file;
     protected final UpToken token;
     protected final UploadOptions option;
     protected final Configuration config;
@@ -26,25 +29,22 @@ abstract class BaseUpload implements Runnable {
     protected final String recorderKey;
     protected final UpTaskCompletionHandler completionHandler;
 
-
     private UploadRegionRequestMetrics currentRegionRequestMetrics;
     private UploadTaskMetrics metrics = new UploadTaskMetrics(null);
 
     private int currentRegionIndex;
     private ArrayList<IUploadRegion> regions;
 
-    private BaseUpload(File file,
-                       byte[] data,
-                       String fileName,
-                       String key,
-                       UpToken token,
-                       UploadOptions option,
-                       Configuration config,
-                       Recorder recorder,
-                       String recorderKey,
-                       UpTaskCompletionHandler completionHandler) {
-        this.file = file;
-        this.data = data;
+    protected BaseUpload(IStreamFactory factory,
+                         String fileName,
+                         String key,
+                         UpToken token,
+                         UploadOptions option,
+                         Configuration config,
+                         Recorder recorder,
+                         String recorderKey,
+                         UpTaskCompletionHandler completionHandler) {
+        this.factory = factory;
         this.fileName = fileName != null ? fileName : "?";
         this.key = key;
         this.token = token;
@@ -64,8 +64,8 @@ abstract class BaseUpload implements Runnable {
                          Configuration config,
                          Recorder recorder,
                          String recorderKey,
-                         UpTaskCompletionHandler completionHandler) {
-        this(file, null, file.getName(), key, token, option, config, recorder, recorderKey, completionHandler);
+                         UpTaskCompletionHandler completionHandler) throws FileNotFoundException {
+        this(new FileStreamFactory(file), file.getName(), key, token, option, config, recorder, recorderKey, completionHandler);
     }
 
     protected BaseUpload(byte[] data,
@@ -75,7 +75,7 @@ abstract class BaseUpload implements Runnable {
                          UploadOptions option,
                          Configuration config,
                          UpTaskCompletionHandler completionHandler) {
-        this(null, data, fileName, key, token, option, config, null, null, completionHandler);
+        this(new ByteStreamFactory(data), fileName, key, token, option, config, null, null, completionHandler);
     }
 
     protected void initData() {

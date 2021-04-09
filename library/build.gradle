@@ -3,7 +3,7 @@ import java.util.regex.Matcher
 apply plugin: 'com.android.library'
 
 def versionName() {
-    String config = 'library/src/main/java/com/qiniu/android/common/Constants.java'
+    String config = '/Users/baijinshuai/Project/android-sdk/library/src/main/java/com/qiniu/android/common/Constants.java'
     String fileContents = new File(config).text
     Matcher myMatcher = fileContents =~ /VERSION = "(.+)";/
     String version = myMatcher[0][1]
@@ -84,7 +84,4 @@ android.libraryVariants.all { variant ->
     artifacts.add('archives', task)
 }
 
-setProperty('VERSION_NAME', version)
-setProperty('VERSION_CODE', code)
-
-apply from: '../mvn_push.gradle'
+// apply from: '../mvn_push.gradle'

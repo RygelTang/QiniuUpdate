@@ -4,28 +4,32 @@ import com.qiniu.android.http.ResponseInfo;
 import com.qiniu.android.http.metrics.UploadRegionRequestMetrics;
 import com.qiniu.android.http.request.RequestTransaction;
 import com.qiniu.android.http.request.handler.RequestProgressHandler;
+import com.qiniu.android.storage.stream.IStreamFactory;
+import com.qiniu.android.storage.stream.utils.StreamUtils;
 import com.qiniu.android.utils.LogUtil;
 import com.qiniu.android.utils.StringUtils;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 
 class PartsUploadPerformerV1 extends PartsUploadPerformer {
 
     private static long BlockSize = 4 * 1024 * 1024;
 
-    PartsUploadPerformerV1(File file,
+    PartsUploadPerformerV1(IStreamFactory factory,
                            String fileName,
                            String key,
                            UpToken token,
                            UploadOptions options,
                            Configuration config,
                            String recorderKey) {
-        super(file, fileName, key, token, options, config, recorderKey);
+        super(factory, fileName, key, token, options, config, recorderKey);
     }
 
     @Override
@@ -38,7 +42,7 @@ class PartsUploadPerformerV1 extends PartsUploadPerformer {
 
     @Override
     UploadFileInfo getDefaultUploadFileInfo() {
-        return new UploadFileInfoPartV1(file.length(), BlockSize, getUploadChunkSize(), file.lastModified());
+        return new UploadFileInfoPartV1(factory.sizeOfStream(), BlockSize, getUploadChunkSize(), factory.lastModifyTime());
     }
 
     @Override
@@ -186,19 +190,21 @@ class PartsUploadPerformerV1 extends PartsUploadPerformer {
 
     private byte[] getDataWithChunk(UploadData chunk,
                                     UploadBlock block) {
-        if (randomAccessFile == null || chunk == null || block == null) {
+        if (factory == null || chunk == null || block == null) {
             return null;
         }
-        byte[] data = new byte[(int) chunk.size];
         try {
-            synchronized (randomAccessFile) {
-                randomAccessFile.seek((chunk.offset + block.offset));
-                randomAccessFile.read(data, 0, (int) chunk.size);
+            byte[] data;
+            synchronized (factory) {
+                final long offset = chunk.offset + block.offset;
+                InputStream stream = factory.newStreamWithOffset(offset);
+                data = StreamUtils.read(stream, (int) chunk.size);
             }
+            return data;
         } catch (IOException e) {
-            data = null;
+            e.printStackTrace();
         }
-        return data;
+        return null;
     }
 
     private long getUploadChunkSize() {

@@ -1,5 +1,6 @@
 package com.qiniu.android.storage;
 
+import com.qiniu.android.storage.stream.IStreamFactory;
 import com.qiniu.android.utils.GroupTaskThread;
 import com.qiniu.android.utils.LogUtil;
 import com.qiniu.android.utils.StringUtils;
@@ -10,7 +11,7 @@ class ConcurrentResumeUpload extends PartsUpload {
 
     private GroupTaskThread groupTaskThread;
 
-    protected ConcurrentResumeUpload(File file,
+    protected ConcurrentResumeUpload(IStreamFactory factory,
                                      String key,
                                      UpToken token,
                                      UploadOptions option,
@@ -18,7 +19,7 @@ class ConcurrentResumeUpload extends PartsUpload {
                                      Recorder recorder,
                                      String recorderKey,
                                      UpTaskCompletionHandler completionHandler) {
-        super(file, key, token, option, config, recorder, recorderKey, completionHandler);
+        super(factory, key, key, token, option, config, recorder, recorderKey, completionHandler);
     }
 
     @Override
