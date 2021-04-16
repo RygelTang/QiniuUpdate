@@ -1,6 +1,7 @@
 # Qiniu Resource Storage SDK for Android
 
 这是一行测试代码
+这是第二行测试代码
 
 [![@qiniu on weibo](http://img.shields.io/badge/weibo-%40qiniutek-blue.svg)](http://weibo.com/qiniutek)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE.md)
